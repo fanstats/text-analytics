@@ -10,7 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 This lab illusrtates the basic steps in text preparation of using R for movie reviews data.
 
 ```{r packages}
-#install.packages(c('tidytext', 'dplyr', 'hunspell', 'textstem', 'qdap'))
+install.packages(c('tidytext', 'dplyr', 'hunspell', 'textstem', 'qdap'))
 ```
 
 ## IMDB reviews
