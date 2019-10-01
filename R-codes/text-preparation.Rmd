@@ -1,1 +1,113 @@
+---
+title: "Text Preparation with R"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This lab illusrtates the basic steps in text preparation of using R for movie reviews data.
+
+```{r packages}
+#install.packages(c('tidytext', 'dplyr', 'hunspell', 'textstem', 'qdap'))
+```
+
+## IMDB reviews
+1,000 Internet Movie Database (IMDB) reviews downloaded from [machine-learning-databases](https://
+archive.ics.uci.edu/ml/machine-learning-databases/00331/). The description of the
+dataset is available at [link to description](https://archive.ics.uci.edu/ml/datasets/Sentiment+Labelled+S
+entences#).
+
+```{r dataset}
+imdb <- read.table("imdb_labelled.txt", col.names = c("comment","positive_flag"), quote = "", comment.char = "", sep = "\t", stringsAsFactors=FALSE)
+imdb$review_id <- 1:nrow(imdb) # unique identifier
+head(imdb,5)
+```
+
+## Tokenization
+Create bags of words from the raw documents
+```{r tokenization}
+library(tidytext) # text mining
+?tidytext
+library(dplyr) # data mannipulation 
+?dplyr
+# tokenization
+?unnest_tokens
+tidy_imdb <- imdb %>% ## pipe operator in dplyr, can be used to chain code together.
+             unnest_tokens(output = word, input = comment) 
+head(tidy_imdb,10)
+```
+
+## Check mis-spelling
+
+```{r check-spelling}
+library(hunspell) # Spell Checking
+?hunspell
+hunspell_check("moovie")
+hunspell_suggest("moovie")
+
+words <- tidy_imdb$word
+checks <- hunspell_check(words)
+bads <- which(!checks)
+for(i in bads){ # time-consuming
+  words[i] = unlist(hunspell_suggest(words[i]))[1]
+}
+tidy_imdb$word = words
+```
+
+## Stop words removel
+
+```{r stop-words}
+stop_words # tibble: a reimagining of the data.frame, https://tibble.tidyverse.org/
+tidy_imdb <- tidy_imdb %>%
+  anti_join(stop_words, by="word")
+head(tidy_imdb,10)
+# create new bag of stop words
+my_stopw = tibble(word = c("movie","imdb"),lexicon = "imdbreveiw")
+
+tidy_imdb <- tidy_imdb %>%
+  anti_join(my_stopw, by="word")
+```
+
+# Stemming and lemmatization
+Reduce terms to word roots
+```{r stemming}
+?hunspell
+hunspell_stem("movies")
+library(textstem)
+?textstem::lemmatize_words
+
+words <- tidy_imdb$word
+stems <- hunspell_stem(words)
+for(i in 1:length(words)){
+  l <- length(unlist(stems[[i]]))
+  if(l>0) words[i] = stems[[i]][l]
+  else words[i] = words[i]
+}
+words = lemmatize_words(words)
+tidy_imdb$word = words
+```
+
+## Replace synonyms
+
+```{r synonyms}
+library(qdap)
+?qdap::syn
+eg <- c("movie","watch","film")
+syn(eg, report.null=F)
+
+source("syn.R")
+syn.replace(terms = eg)
+
+uq.w = unique(tidy_imdb$word)
+syn.w = syn.replace(terms = uq.w)
+syn.w = syn.w$terms
+for(i in 1:length(uq.w)){ # time-consuming
+   ind = which(tidy_imdb$word %in% uq.w[i])
+   tidy_imdb$word[ind] = syn.w[i]
+}
+```
+
+
 
