@@ -10,7 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 This lab illusrtates the basic steps in text preparation of using R for movie reviews data.
 
 ```{r packages}
-install.packages(c('tidytext', 'dplyr', 'hunspell', 'textstem', 'qdap'))
+#install.packages(c('tidytext', 'dplyr', 'hunspell', 'textstem', 'qdap'))
 ```
 
 ## IMDB reviews
@@ -21,19 +21,20 @@ entences#).
 
 ```{r dataset}
 imdb <- read.table("imdb_labelled.txt", col.names = c("comment","positive_flag"), quote = "", comment.char = "", sep = "\t", stringsAsFactors=FALSE)
-imdb$review_id <- 1:nrow(imdb) # unique identifier
+imdb$review_id <- factor(1:nrow(imdb)) # unique identifier
 head(imdb,5)
 ```
 
 ## Tokenization
 Create bags of words from the raw documents
+
 ```{r tokenization}
 library(tidytext) # text mining
 ?tidytext
 library(dplyr) # data mannipulation 
 ?dplyr
 # tokenization
-?unnest_tokens
+?tidytext::unnest_tokens
 tidy_imdb <- imdb %>% ## pipe operator in dplyr, can be used to chain code together.
              unnest_tokens(output = word, input = comment) 
 head(tidy_imdb,10)
@@ -56,16 +57,18 @@ for(i in bads){ # time-consuming
 tidy_imdb$word = words
 ```
 
-## Stop words removel
+## Stop word removel
 
 ```{r stop-words}
-stop_words # tibble: a reimagining of the data.frame, https://tibble.tidyverse.org/
+stop_words # from tidytext; tibble: a reimagining of the data.frame, https://tibble.tidyverse.org/
+?dplyr::anti_join
 tidy_imdb <- tidy_imdb %>%
   anti_join(stop_words, by="word")
 head(tidy_imdb,10)
-# create new bag of stop words
-my_stopw = tibble(word = c("movie","imdb"),lexicon = "imdbreveiw")
 
+# create new bag of stop words
+?dplyr::tibble
+my_stopw = tibble(word = c("movie","imdb"),lexicon = "imdbreveiw")
 tidy_imdb <- tidy_imdb %>%
   anti_join(my_stopw, by="word")
 ```
