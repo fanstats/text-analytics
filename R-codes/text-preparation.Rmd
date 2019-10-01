@@ -57,7 +57,7 @@ for(i in bads){ # time-consuming
 tidy_imdb$word = words
 ```
 
-## Stop word removel
+## Stop word removal
 
 ```{r stop-words}
 stop_words # from tidytext; tibble: a reimagining of the data.frame, https://tibble.tidyverse.org/
@@ -68,7 +68,7 @@ head(tidy_imdb,10)
 
 # create new bag of stop words
 ?dplyr::tibble
-my_stopw = tibble(word = c("movie","imdb"),lexicon = "imdbreveiw")
+my_stopw = tibble(word = c("movie","imdb"),lexicon = "imdbreview")
 tidy_imdb <- tidy_imdb %>%
   anti_join(my_stopw, by="word")
 ```

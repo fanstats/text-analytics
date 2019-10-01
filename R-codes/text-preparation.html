@@ -263,8 +263,8 @@ for(i in bads){ # time-consuming
 }
 tidy_imdb$word = words</code></pre>
 </div>
-<div id="stop-word-removel" class="section level2">
-<h2>Stop word removel</h2>
+<div id="stop-word-removal" class="section level2">
+<h2>Stop word removal</h2>
 <pre class="r"><code>stop_words # from tidytext; tibble: a reimagining of the data.frame, https://tibble.tidyverse.org/</code></pre>
 <pre><code>## # A tibble: 1,149 x 2
 ##    word        lexicon
@@ -297,7 +297,7 @@ head(tidy_imdb,10)</code></pre>
 ## 10             0         2   audience</code></pre>
 <pre class="r"><code># create new bag of stop words
 ?dplyr::tibble
-my_stopw = tibble(word = c(&quot;movie&quot;,&quot;imdb&quot;),lexicon = &quot;imdbreveiw&quot;)
+my_stopw = tibble(word = c(&quot;movie&quot;,&quot;imdb&quot;),lexicon = &quot;imdbreview&quot;)
 tidy_imdb &lt;- tidy_imdb %&gt;%
   anti_join(my_stopw, by=&quot;word&quot;)</code></pre>
 </div>
