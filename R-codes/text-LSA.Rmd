@@ -1,0 +1,224 @@
+---
+title: "Latent Semantic Analysis with R"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This lab illusrtates the basic steps in text preparation of using R for movie reviews data.
+
+```{r packages}
+#install.packages(c('tidytext', 'dplyr', 'hunspell', 'textstem', 'qdap'))
+```
+
+## IMDB reviews
+1,000 Internet Movie Database (IMDB) reviews downloaded from [machine-learning-databases](https://
+archive.ics.uci.edu/ml/machine-learning-databases/00331/). The description of the
+dataset is available at [link to description](https://archive.ics.uci.edu/ml/datasets/Sentiment+Labelled+S
+entences#).
+
+```{r dataset}
+imdb <- read.table("imdb_labelled.txt", col.names = c("comment","positive_flag"), quote = "", comment.char = "", sep = "\t", stringsAsFactors=FALSE)
+imdb$review_id <- factor(1:nrow(imdb)) # unique identifier
+```
+
+## Tokenization
+Create bags of words from the raw documents
+
+```{r message = FALSE, tokenization}
+library(tidytext) # text mining
+?tidytext
+library(dplyr) # data mannipulation 
+?dplyr
+# tokenization
+?tidytext::unnest_tokens
+tidy_imdb <- imdb %>% ## pipe operator in dplyr, can be used to chain code together.
+             unnest_tokens(output = word, input = comment,
+                           token = "ngrams",n=1) 
+```
+
+## Checking mis-spelling
+
+```{r message = FALSE, check-spelling}
+library(hunspell) # Spell Checking
+?hunspell
+#hunspell_check("moovie")
+#hunspell_suggest("moovie")
+
+words <- tidy_imdb$word
+checks <- hunspell_check(words)
+bads <- which(!checks)
+for(i in bads){ # time-consuming
+  words[i] = unlist(hunspell_suggest(words[i]))[1]
+}
+tidy_imdb$word = words
+```
+
+## Stop word removal
+
+```{r stop-words}
+#stop_words ## from tidytext; tibble: a reimagining of the data.frame, https://tibble.tidyverse.org/
+?dplyr::anti_join
+tidy_imdb <- tidy_imdb %>%
+  anti_join(stop_words, by="word")
+#head(tidy_imdb,10)
+
+# create new bag of stop words
+?dplyr::tibble
+my_stopw = tibble(word = c("movie","imdb"),lexicon = "imdbreview")
+tidy_imdb <- tidy_imdb %>%
+  anti_join(my_stopw, by="word")
+```
+
+## Stemming and lemmatization
+Reduce terms to word roots
+```{r message = FALSE, stemming}
+?hunspell
+#hunspell_stem("movies")
+library(textstem)
+?textstem::lemmatize_words
+
+words <- tidy_imdb$word
+stems <- hunspell_stem(words)
+for(i in 1:length(words)){
+  l <- length(unlist(stems[[i]]))
+  if(l>0) words[i] = stems[[i]][l]
+  else words[i] = words[i]
+}
+words = lemmatize_words(words)
+tidy_imdb$word = words
+```
+
+## Replacing synonyms
+
+```{r message = FALSE, synonyms}
+library(qdap)
+?qdap::syn
+#eg <- c("movie","watch","film")
+#syn(eg, report.null=F)
+
+source("syn.R")
+#syn.replace(terms = eg)
+
+uq.w = unique(tidy_imdb$word)
+syn.w = syn.replace(terms = uq.w)
+syn.w = syn.w$terms
+for(i in 1:length(uq.w)){ # time-consuming
+   ind = which(tidy_imdb$word %in% uq.w[i])
+   tidy_imdb$word[ind] = syn.w[i]
+}
+```
+
+## Creating weighted TDM
+
+```{r tdm-tf_idf}
+# tf_idf weighting 
+words_n <- tidy_imdb %>%
+  count(review_id, word)
+tf_idf <- words_n %>%
+  bind_tf_idf(word, review_id, n)
+tf_idf = na.omit(tf_idf)
+# weighted term-document matrix
+tdm <- tf_idf %>%
+  cast_tdm(word, review_id, tf_idf)
+tdm <- as.matrix(tdm)
+dim(tdm)
+tdm[1:8,1:8]
+```
+
+# Latent semantic analysis
+
+```{r packages-lsa}
+#install.packages(c('LSAfun', 'lsa', 'RSpectra',"tictoc"))
+```
+
+## Calculating SVD/truncated SVD
+
+```{r message = FALSE, svd}
+# base library
+?svd
+svd.tdm <- svd(tdm)
+# U: svd.tdm$u, V: svd.tdm$u, \Sigma: diag(svd.tdm$d), R stores singular values as a numeric vector. 
+
+library(lsa)
+?lsa
+# to check the lsa function, simply type
+lsa
+# calculate truncated SVD with k = 3
+library(tictoc)
+tic()
+svd3.tdm <- lsa(tdm, dims=3)
+toc()
+
+# recommended
+library(RSpectra) 
+# a R interface to the 'Spectra' library (C++) that can calculate truncated eigen decomposition or SVD on sparse matrices very efficiently https://cran.r-project.org/web/packages/RSpectra/.
+?svds
+tic()
+svds3.tdm <- svds(tdm, k=3)
+toc()
+# U: svds3.tdm$u, V: svds3.tdm$u, \Sigma: diag(svds3.tdm$d)
+
+# *** 
+## create sparse matrix 
+library(Matrix)
+tdm.sp <- as(tdm, "dgCMatrix")
+## function interface
+Af = function(x, args) as.numeric(args %*% x)
+Atf = function(x, args) as.numeric(crossprod(args, x))
+tic()
+svds3.tdm <- svds(Af, k=3, Atrans = Atf, dim=tdm.sp@Dim, args=tdm.sp)
+toc()
+```
+
+## Term, document and the LSA space
+```{r message = FALSE, termspace}
+# value-weighted term matrix 
+tm <- svds3.tdm$u %*% diag(svds3.tdm$d)
+# print tm with terms
+rownames(tm) <- rownames(tdm)
+round(tm[1:10,],digits = 2)
+# plot the first two dimensions and assign term names
+plot.new()
+{plot(x = tm[1:10,1], y= tm[1:10,2], type="n", main="Term Plot")
+text(x = tm[1:10,1], y= tm[1:10,2], labels=rownames(tm)[1:10] , cex=1)}
+```
+
+```{r docsspace}
+# apply to document matrix
+# value-weighted document matrix 
+dm <- svds3.tdm$v %*% diag(svds3.tdm$d)
+# print dm with documents
+rownames(dm) <- colnames(tdm)
+round(dm[1:10,],digits = 2)
+# plot the first two dimensions and assign term names
+plot.new()
+{plot(x = dm[1:10,1], y = dm[1:10,2], type="n", main="Document Plot")
+text(x = dm[1:10,1], y = dm[1:10,2], labels=rownames(dm)[1:10] , cex=1)}
+```
+
+## Cosine similarity
+
+```{r message = FALSE, cosine}
+library(LSAfun)
+# calculate cosine similarity between two terms
+costring('sea','angle', tvectors= tm, breakdown=TRUE)
+
+# calculate cosine similarity among all the words in the term matrix 
+# using multicos
+cos.tm <- multicos(rownames(tm[1:10,]), tvectors=tm, breakdown=TRUE)
+# or
+# normalize the term matrix
+r <- sqrt(rowSums(tm[1:10,]^2))
+n.tm <- (1/r)*tm[1:10,]
+# calculate cosine similarity
+cos.tm <- tcrossprod(n.tm)
+
+# show half of the matrix due to the symmetry
+cos.tm[upper.tri(cos.tm)] <- 0
+round(cos.tm, digits = 2)
+```
+
+
